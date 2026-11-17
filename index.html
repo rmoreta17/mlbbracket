@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Editable MLB 30-Team Bracket</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;background:#091321;color:#f4f7fb}
+*{box-sizing:border-box}body{margin:0;padding:18px;background:radial-gradient(ellipse at center,#172b45,#091321 72%);min-height:100vh}
+header{max-width:1400px;margin:0 auto 18px}h1{font-size:clamp(24px,4vw,36px);margin:0 0 5px}.sub{color:#aebfd2;margin:0 0 14px}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}button{border:0;border-radius:9px;padding:10px 13px;font-weight:750;background:#edbd4f;color:#152238;cursor:pointer}button.alt{background:#233b59;color:#f3f6fb;border:1px solid #49627f}#status{color:#9fb4cb;font-size:12px}
+.wrap{max-width:1500px;margin:auto;overflow-x:auto;padding-bottom:16px}
+.bracket{min-width:1160px;display:grid;grid-template-columns:1.2fr 1fr 1fr 1fr 1.15fr 1fr 1fr 1fr 1.2fr;gap:9px;align-items:stretch}
+.sidehead{grid-column:span 4;text-align:center;color:#edc45e;font-weight:800;letter-spacing:.08em;font-size:12px;padding:9px 0 4px}
+.centerhead{grid-column:5;text-align:center;color:#edc45e;font-size:12px;font-weight:800;padding:9px 0 4px}
+.round{background:#12243a;border:1px solid #2b4562;border-radius:12px;padding:9px;min-height:690px;display:flex;flex-direction:column;gap:7px}
+.round h2{text-align:center;color:#edc45e;font-size:12px;margin:1px 0 6px;min-height:30px}
+.games{display:flex;flex:1;flex-direction:column;justify-content:space-around;gap:7px}
+.game{background:#0a192b;border:1px solid #304a68;border-radius:9px;padding:7px;min-height:62px}
+.game.special{border:1.5px solid #e7b947;background:#1b2e45}
+.game small{display:block;color:#e7bd5b;font-size:9px;font-weight:800;letter-spacing:.06em;margin-bottom:4px}
+.game select{width:100%;font-size:11px;color:#f7f9fc;background:#203954;border:1px solid #49627e;border-radius:6px;padding:6px}
+.wait{font-size:10px;color:#90a7c0;line-height:1.35;padding:4px 1px}
+.sideleft{grid-column:1}.r2left{grid-column:2}.qfleft{grid-column:3}.sfleft{grid-column:4}
+.final{grid-column:5;background:#1a2b40;border:1.5px solid #c89b39;border-radius:13px;padding:10px;display:flex;flex-direction:column;justify-content:center;min-height:400px;align-self:center}
+.final h2{text-align:center;color:#edc45e;font-size:14px}
+.sfright{grid-column:6}.qfright{grid-column:7}.r2right{grid-column:8}.sideright{grid-column:9}
+.bye{border:1px dashed #d5aa4b;border-radius:8px;padding:8px;color:#f1d58d;font-size:10px;text-align:center}
+.champ{font-size:15px;text-align:center;font-weight:850;color:#f4cf69;margin-top:12px;line-height:1.35}
+.editor{max-width:1400px;margin:18px auto;background:#12243a;border:1px solid #2b4562;border-radius:12px;padding:13px}
+.editor summary{cursor:pointer;color:#edc45e;font-weight:800}
+.teamgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:7px;margin-top:12px}
+.teamgrid label{font-size:10px;color:#aebfd2}.teamgrid input{width:100%;margin-top:3px;padding:8px;border-radius:7px;background:#203954;border:1px solid #49627e;color:white}
+.note{font-size:11px;color:#9fb4cb;line-height:1.45}
+@media(max-width:700px){body{padding:12px}.bracket{min-width:1120px}.round{min-height:650px}}
+</style></head><body>
+<header><h1>⚾ MLB 30-Team Tournament</h1><p class="sub">Editable, two-sided single-elimination bracket · Cleveland vs. Toronto is Game 1.</p>
+<div class="toolbar">
+<button onclick="save(true)">Save bracket</button><button class="alt" onclick="resetPicks()">Reset winners</button><button class="alt" onclick="exportFile()">Export backup</button><button class="alt" onclick="document.getElementById('import').click()">Import backup</button><input id="import" type="file" accept="application/json" hidden onchange="importFile(event)"><span id="status">Edits save automatically in this browser.</span>
+</div></header>
+<div class="wrap"><div class="bracket" id="bracket">
+<div class="sidehead">LEFT SIDE OF BRACKET</div><div class="centerhead">CHAMPIONSHIP</div><div class="sidehead">RIGHT SIDE OF BRACKET</div>
+</div></div>
+<details class="editor"><summary>✏️ Edit all 30 team names</summary><p class="note">Change any team name and it will update throughout the bracket. Your winner selections will be cleared if a team name changes.</p><div class="teamgrid" id="teamEditor"></div></details>
+<script>
+const original=[
+"Cleveland Guardians","Toronto Blue Jays","New York Yankees","Pittsburgh Pirates",
+"Boston Red Sox","Washington Nationals","Tampa Bay Rays","Miami Marlins",
+"Baltimore Orioles","Philadelphia Phillies","Detroit Tigers","New York Mets",
+"Minnesota Twins","Atlanta Braves","Kansas City Royals","Cincinnati Reds",
+"Chicago White Sox","St. Louis Cardinals","Houston Astros","Milwaukee Brewers",
+"Seattle Mariners","Chicago Cubs","Texas Rangers","Colorado Rockies",
+"Los Angeles Angels","Arizona Diamondbacks","Athletics","San Francisco Giants",
+"Los Angeles Dodgers","San Diego Padres"
+];
+let teams=[...original], picks={};
+const $=id=>document.getElementById(id);
+function entrants(stage){
+ const w=(key)=>picks[key]||"";
+ const r1=Array.from({length:15},(_,i)=>w("1-"+i));
+ if(stage==="r2L")return r1.slice(0,8);
+ if(stage==="r2R")return r1.slice(8,15);
+ const r2L=Array.from({length:4},(_,i)=>w("2L-"+i));
+ const r2R=Array.from({length:3},(_,i)=>w("2R-"+i));
+ if(stage==="qfL")return r2L;
+ if(stage==="qfR")return [...r2R,r1[14]];
+ if(stage==="sfL")return [w("qfL-0"),w("qfL-1")];
+ if(stage==="sfR")return [w("qfR-0"),w("qfR-1")];
+ if(stage==="final")return [w("sfL-0"),w("sfR-0")];
+ return [];
+}
+function gameCard(key,label,a,b,special=false){
+ const d=document.createElement("div");d.className="game"+(special?" special":"");
+ const sm=document.createElement("small");sm.textContent=label;d.append(sm);
+ const sel=document.createElement("select");sel.disabled=!(a&&b);
+ const placeholder=document.createElement("option");placeholder.value="";placeholder.textContent=a&&b?"— Pick winner —":"Waiting for teams";sel.append(placeholder);
+ [a,b].filter(Boolean).forEach(t=>{const o=document.createElement("option");o.value=t;o.textContent=t;o.selected=picks[key]===t;sel.append(o)});
+ sel.addEventListener("change",()=>{picks[key]=sel.value;clearDownstream(key);save(false);render()});
+ d.append(sel);
+ if(!a||!b){const wait=document.createElement("div");wait.className="wait";wait.textContent=a||b?`Waiting for opponent · ${a||b}`:"Winners advance here";d.append(wait)}
+ return d;
+}
+function clearDownstream(key){
+ const order=["1-","2L-","2R-","qfL-","qfR-","sfL-","sfR-","final-"];
+ const ix=order.findIndex(p=>key.startsWith(p));
+ if(ix<0)return;
+ for(let j=ix+1;j<order.length;j++)Object.keys(picks).filter(k=>k.startsWith(order[j])).forEach(k=>delete picks[k]);
+}
+function column(title,cls,items){const c=document.createElement("section");c.className="round "+cls;const h=document.createElement("h2");h.textContent=title;c.append(h);const gs=document.createElement("div");gs.className="games";items.forEach(x=>gs.append(x));c.append(gs);return c}
+function render(){
+ const root=$("bracket");root.innerHTML='<div class="sidehead">LEFT SIDE OF BRACKET</div><div class="centerhead">CHAMPIONSHIP</div><div class="sidehead">RIGHT SIDE OF BRACKET</div>';
+ const leftR1=Array.from({length:8},(_,i)=>gameCard("1-"+i,"GAME "+(i+1),teams[i*2],teams[i*2+1],i===0));
+ const rightR1=Array.from({length:7},(_,i)=>gameCard("1-"+(i+8),"GAME "+(i+9),teams[16+i*2],teams[17+i*2]));
+ const l2=entrants("r2L"),r2=entrants("r2R");
+ const leftR2=Array.from({length:4},(_,i)=>gameCard("2L-"+i,"ROUND 2 · GAME "+(i+1),l2[i*2],l2[i*2+1]));
+ const rightR2=Array.from({length:3},(_,i)=>gameCard("2R-"+i,"ROUND 2 · GAME "+(i+5),r2[i*2],r2[i*2+1]));
+ const ql=entrants("qfL"),qr=entrants("qfR");
+ const leftQ=Array.from({length:2},(_,i)=>gameCard("qfL-"+i,"QUARTERFINAL "+(i+1),ql[i*2],ql[i*2+1]));
+ const rightQ=Array.from({length:2},(_,i)=>gameCard("qfR-"+i,"QUARTERFINAL "+(i+3),qr[i*2],qr[i*2+1]));
+ const sl=entrants("sfL"),sr=entrants("sfR");
+ const leftS=gameCard("sfL-0","LEFT SEMIFINAL",sl[0],sl[1]);
+ const rightS=gameCard("sfR-0","RIGHT SEMIFINAL",sr[0],sr[1]);
+ const f=entrants("final");const final=document.createElement("section");final.className="final";const fh=document.createElement("h2");fh.textContent="🏆 CHAMPIONSHIP";final.append(fh);final.append(gameCard("final-0","WORLD SERIES",f[0],f[1],true));
+ if(picks["final-0"]){const champ=document.createElement("div");champ.className="champ";champ.textContent="🏆 CHAMPION\\n"+picks["final-0"];final.append(champ)}
+ const bye=document.createElement("div");bye.className="bye";bye.textContent="ROUND 2 BYE: Game 15 winner advances directly to the right-side quarterfinals.";
+ const rightR2Col=column("ROUND 2", "r2right",[...rightR2,bye]);
+ root.append(column("ROUND 1 · 8 GAMES","sideleft",leftR1),column("ROUND 2 · 4 GAMES","r2left",leftR2),column("QUARTERFINALS","qfleft",leftQ),column("SEMIFINAL","sfleft",[leftS]),final,column("SEMIFINAL","sfright",[rightS]),column("QUARTERFINALS","qfright",rightQ),rightR2Col,column("ROUND 1 · 7 GAMES","sideright",rightR1));
+ renderEditor();
+}
+function renderEditor(){const el=$("teamEditor");el.innerHTML="";teams.forEach((name,i)=>{const lab=document.createElement("label");lab.textContent=`Team ${i+1}`;const inp=document.createElement("input");inp.value=name;inp.addEventListener("change",()=>{teams[i]=inp.value.trim()||name;picks={};save(false);render()});lab.append(inp);el.append(lab)})}
+function save(show){localStorage.setItem("mlb30twoSideBracket",JSON.stringify({teams,picks}));if(show)$("status").textContent="Bracket saved on this device ✓"}
+function resetPicks(){if(!confirm("Clear all selected winners? Team names will stay the same."))return;picks={};save(false);render();$("status").textContent="Winner picks cleared."}
+function exportFile(){const blob=new Blob([JSON.stringify({teams,picks},null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="mlb-30-team-bracket-backup.json";a.click();URL.revokeObjectURL(a.href)}
+function importFile(e){const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const d=JSON.parse(reader.result);if(d.teams?.length!==30||!d.picks)throw Error();teams=d.teams;picks=d.picks;save(false);render();$("status").textContent="Backup imported ✓"}catch{$("status").textContent="Could not read that backup file."}};reader.readAsText(file);e.target.value=""}
+try{const d=JSON.parse(localStorage.getItem("mlb30twoSideBracket"));if(d?.teams?.length===30){teams=d.teams;picks=d.picks||{}}}catch{}
+render();
+</script></body></html>
