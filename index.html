@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Editable MLB 30-Team Bracket</title>
+<title>Editable 30-Team Tournament</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;background:#091321;color:#f4f7fb}
 *{box-sizing:border-box}body{margin:0;padding:18px;background:radial-gradient(ellipse at center,#172b45,#091321 72%);min-height:100vh}
@@ -31,9 +31,9 @@ header{max-width:1400px;margin:0 auto 18px}h1{font-size:clamp(24px,4vw,36px);mar
 .note{font-size:11px;color:#9fb4cb;line-height:1.45}
 @media(max-width:700px){body{padding:12px}.bracket{min-width:1120px}.round{min-height:650px}}
 </style></head><body>
-<header><h1>⚾ MLB 30-Team Tournament</h1><p class="sub">Editable, two-sided single-elimination bracket · Cleveland vs. Toronto is Game 1.</p>
+<header><h1 id="pageTitle">⚾ MLB 30-Team Tournament</h1><p class="sub" id="pageSubtitle">Editable, two-sided single-elimination bracket · Cleveland vs. Toronto is Game 1.</p>
 <div class="toolbar">
-<button onclick="save(true)">Save bracket</button><button class="alt" onclick="resetPicks()">Reset winners</button><button class="alt" onclick="exportFile()">Export backup</button><button class="alt" onclick="document.getElementById('import').click()">Import backup</button><input id="import" type="file" accept="application/json" hidden onchange="importFile(event)"><span id="status">Edits save automatically in this browser.</span>
+<label for="leagueSelect" style="font-size:12px;font-weight:750;color:#edc45e">LEAGUE</label><select id="leagueSelect" onchange="switchLeague(this.value)" style="background:#203954;color:#fff;border:1px solid #49627e;border-radius:9px;padding:10px 13px;font-weight:750"><option value="MLB">MLB</option><option value="NBA">NBA</option></select><button onclick="randomizeTeams()">🎲 Randomize Teams</button><button onclick="save(true)">Save bracket</button><button class="alt" onclick="resetPicks()">Reset winners</button><button class="alt" onclick="exportFile()">Export backup</button><button class="alt" onclick="document.getElementById('import').click()">Import backup</button><input id="import" type="file" accept="application/json" hidden onchange="importFile(event)"><span id="status">Edits save automatically in this browser.</span>
 </div></header>
 <div class="wrap"><div class="bracket" id="bracket">
 <div class="sidehead">LEFT SIDE OF BRACKET</div><div class="centerhead">CHAMPIONSHIP</div><div class="sidehead">RIGHT SIDE OF BRACKET</div>
@@ -50,7 +50,48 @@ const original=[
 "Los Angeles Angels","Arizona Diamondbacks","Athletics","San Francisco Giants",
 "Los Angeles Dodgers","San Diego Padres"
 ];
-let teams=[...original], picks={};
+const nbaTeams=[
+"Atlanta Hawks","Boston Celtics","Brooklyn Nets","Charlotte Hornets","Chicago Bulls",
+"Cleveland Cavaliers","Dallas Mavericks","Denver Nuggets","Detroit Pistons","Golden State Warriors",
+"Houston Rockets","Indiana Pacers","LA Clippers","Los Angeles Lakers","Memphis Grizzlies",
+"Miami Heat","Milwaukee Bucks","Minnesota Timberwolves","New Orleans Pelicans","New York Knicks",
+"Oklahoma City Thunder","Orlando Magic","Philadelphia 76ers","Phoenix Suns","Portland Trail Blazers",
+"Sacramento Kings","San Antonio Spurs","Toronto Raptors","Utah Jazz","Washington Wizards"
+];
+const leagueRosters={MLB:original,NBA:nbaTeams};
+let league="MLB", teams=[...original], picks={};
+function loadLeague(){
+ try{
+  const saved=JSON.parse(localStorage.getItem("tournamentLeagues")||"{}");
+  if(saved[league]?.teams?.length===30){teams=saved[league].teams;picks=saved[league].picks||{};return;}
+ }catch{}
+ if(league==="MLB"){
+  try{const old=JSON.parse(localStorage.getItem("mlb30twoSideBracket"));if(old?.teams?.length===30){teams=old.teams;picks=old.picks||{};return;}}catch{}
+ }
+ teams=[...leagueRosters[league]];picks={};
+}
+function updateLeagueHeading(){
+ const isNBA=league==="NBA";
+ $("pageTitle").textContent=(isNBA?"🏀 NBA":"⚾ MLB")+" 30-Team Tournament";
+ $("pageSubtitle").textContent=isNBA?"Editable, two-sided single-elimination bracket · All 30 NBA teams.":"Editable, two-sided single-elimination bracket · Cleveland vs. Toronto is Game 1.";
+ document.title="Editable "+league+" 30-Team Tournament";
+}
+function switchLeague(next){
+ if(next!=="MLB"&&next!=="NBA")return;
+ save(false);league=next;loadLeague();updateLeagueHeading();render();$("status").textContent=league+" bracket loaded. Your other league bracket is saved separately.";
+}
+function randomizeTeams(){
+ const shuffled=[...leagueRosters[league]];
+ for(let i=shuffled.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]];}
+ if(league==="MLB"){
+  const cleveland="Cleveland Guardians",toronto="Toronto Blue Jays";
+  const rest=shuffled.filter(t=>t!==cleveland&&t!==toronto);
+  teams=[cleveland,toronto,...rest];
+ }else teams=shuffled;
+ picks={};save(false);render();
+ $("status").textContent=league+" teams randomized. All winner picks were cleared.";
+}
+
 const $=id=>document.getElementById(id);
 function entrants(stage){
  const w=(key)=>picks[key]||"";
@@ -97,18 +138,21 @@ function render(){
  const sl=entrants("sfL"),sr=entrants("sfR");
  const leftS=gameCard("sfL-0","LEFT SEMIFINAL",sl[0],sl[1]);
  const rightS=gameCard("sfR-0","RIGHT SEMIFINAL",sr[0],sr[1]);
- const f=entrants("final");const final=document.createElement("section");final.className="final";const fh=document.createElement("h2");fh.textContent="🏆 CHAMPIONSHIP";final.append(fh);final.append(gameCard("final-0","WORLD SERIES",f[0],f[1],true));
- if(picks["final-0"]){const champ=document.createElement("div");champ.className="champ";champ.textContent="🏆 CHAMPION\\n"+picks["final-0"];final.append(champ)}
+ const f=entrants("final");const final=document.createElement("section");final.className="final";const fh=document.createElement("h2");fh.textContent="🏆 CHAMPIONSHIP";final.append(fh);final.append(gameCard("final-0",league==="MLB"?"WORLD SERIES":"NBA FINALS",f[0],f[1],true));
+ if(picks["final-0"]){const champ=document.createElement("div");champ.className="champ";champ.textContent="🏆 CHAMPION · "+picks["final-0"];final.append(champ)}
  const bye=document.createElement("div");bye.className="bye";bye.textContent="ROUND 2 BYE: Game 15 winner advances directly to the right-side quarterfinals.";
  const rightR2Col=column("ROUND 2", "r2right",[...rightR2,bye]);
  root.append(column("ROUND 1 · 8 GAMES","sideleft",leftR1),column("ROUND 2 · 4 GAMES","r2left",leftR2),column("QUARTERFINALS","qfleft",leftQ),column("SEMIFINAL","sfleft",[leftS]),final,column("SEMIFINAL","sfright",[rightS]),column("QUARTERFINALS","qfright",rightQ),rightR2Col,column("ROUND 1 · 7 GAMES","sideright",rightR1));
  renderEditor();
 }
 function renderEditor(){const el=$("teamEditor");el.innerHTML="";teams.forEach((name,i)=>{const lab=document.createElement("label");lab.textContent=`Team ${i+1}`;const inp=document.createElement("input");inp.value=name;inp.addEventListener("change",()=>{teams[i]=inp.value.trim()||name;picks={};save(false);render()});lab.append(inp);el.append(lab)})}
-function save(show){localStorage.setItem("mlb30twoSideBracket",JSON.stringify({teams,picks}));if(show)$("status").textContent="Bracket saved on this device ✓"}
+function save(show){
+ const all=JSON.parse(localStorage.getItem("tournamentLeagues")||"{}");all[league]={teams,picks};localStorage.setItem("tournamentLeagues",JSON.stringify(all));
+ if(league==="MLB")localStorage.setItem("mlb30twoSideBracket",JSON.stringify({teams,picks}));
+ if(show)$("status").textContent=league+" bracket saved on this device ✓";
+}
 function resetPicks(){if(!confirm("Clear all selected winners? Team names will stay the same."))return;picks={};save(false);render();$("status").textContent="Winner picks cleared."}
-function exportFile(){const blob=new Blob([JSON.stringify({teams,picks},null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="mlb-30-team-bracket-backup.json";a.click();URL.revokeObjectURL(a.href)}
+function exportFile(){const blob=new Blob([JSON.stringify({teams,picks},null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=league.toLowerCase()+"-30-team-bracket-backup.json";a.click();URL.revokeObjectURL(a.href)}
 function importFile(e){const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const d=JSON.parse(reader.result);if(d.teams?.length!==30||!d.picks)throw Error();teams=d.teams;picks=d.picks;save(false);render();$("status").textContent="Backup imported ✓"}catch{$("status").textContent="Could not read that backup file."}};reader.readAsText(file);e.target.value=""}
-try{const d=JSON.parse(localStorage.getItem("mlb30twoSideBracket"));if(d?.teams?.length===30){teams=d.teams;picks=d.picks||{}}}catch{}
-render();
+loadLeague();$("leagueSelect").value=league;updateLeagueHeading();render();
 </script></body></html>
